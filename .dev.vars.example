@@ -1,0 +1,3 @@
+# Copy to `.dev.vars` for local development, then fill in your bot token.
+# `.dev.vars` is gitignored. For production use `wrangler secret put BOT_TOKEN`.
+BOT_TOKEN=123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
