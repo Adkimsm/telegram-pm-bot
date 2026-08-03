@@ -1,0 +1,62 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "pmbot",
+	"main": "src/index.ts",
+	// Must not be in the future. `nodejs_compat` is not listed: nothing here
+	// imports a Node builtin (grammY resolves to its web build on Workers), and
+	// as of 2026-08-04 the flag is the platform default anyway.
+	"compatibility_date": "2026-08-03",
+	// No behavioural configuration lives here on purpose.
+	// Everything the bot needs at runtime is either derived from BOT_TOKEN
+	// (webhook secret, session key, claim code) or stored in D1 and edited
+	// through the web UI (owner id, relay chat id, welcome text, rate limits).
+	//
+	// The only secret is BOT_TOKEN: `wrangler secret put BOT_TOKEN`.
+	"observability": {
+		"enabled": true
+	},
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		// Worker code must run first for these paths; everything else is served
+		// straight from static assets (free and uncounted against request quota).
+		"run_worker_first": [
+			"/tg/*",
+			"/auth/*",
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			// The binding name must stay `DB`: src/lib/types.ts reads env.DB.
+			"binding": "DB",
+			"database_name": "pmbot-db",
+			"database_id": "0989f04f-564b-4eae-a420-698d8a067480",
+			"migrations_dir": "migrations"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "MEDIA_GROUP",
+				"class_name": "MediaGroupBuffer"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			// SQLite-backed DOs are the only kind available on the Workers Free plan.
+			"new_sqlite_classes": [
+				"MediaGroupBuffer"
+			]
+		}
+	],
+	"triggers": {
+		// Daily housekeeping: prune expired sessions, nonces and dedup rows.
+		"crons": [
+			"17 4 * * *"
+		]
+	}
+}
