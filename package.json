@@ -1,0 +1,29 @@
+{
+  "name": "pmbot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node tests/run-all.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test && npm run dry-run",
+    "dry-run": "wrangler deploy --dry-run --outdir=.build",
+    "claim-code": "node scripts/claim-code.mjs",
+    "set-webhook": "node scripts/webhook.mjs set",
+    "webhook-info": "node scripts/webhook.mjs info",
+    "del-webhook": "node scripts/webhook.mjs delete",
+    "db:migrate": "wrangler d1 migrations apply pmbot-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply pmbot-db --local",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "grammy": "1.45.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260801.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.118.0"
+  }
+}
