@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>pmbot 控制台</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<header>
+  <h1>pmbot 控制台</h1>
+  <span id="ready-badge" class="badge">加载中…</span>
+  <span class="spacer"></span>
+  <button class="btn secondary" id="btn-refresh">刷新</button>
+  <button class="btn secondary" id="btn-logout">退出</button>
+</header>
+
+<nav role="tablist">
+  <button role="tab" data-panel="overview" aria-selected="true">概览</button>
+  <button role="tab" data-panel="settings" aria-selected="false">设置</button>
+  <button role="tab" data-panel="users" aria-selected="false">用户</button>
+  <button role="tab" data-panel="bans" aria-selected="false">黑名单</button>
+  <button role="tab" data-panel="maintenance" aria-selected="false">运维</button>
+</nav>
+
+<main>
+
+<!-- ── 概览 ───────────────────────────────────────────────── -->
+<section class="panel active" id="panel-overview">
+  <div id="setup-notice"></div>
+
+  <div class="card">
+    <h2>统计</h2>
+    <div class="grid" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <h2>中转群<span class="hint">每个联系人一个话题</span></h2>
+    <div id="relay-status"></div>
+
+    <details id="relay-help">
+      <summary class="muted" style="cursor:pointer;margin:0.75rem 0">如何准备中转群</summary>
+      <ol class="steps">
+        <li>新建一个群组（Telegram 无法让 bot 代建）。</li>
+        <li>群组设置里开启「话题」（Topics）。开启后群会升级为超级群。</li>
+        <li>把本 bot 加入该群，并设为<b>管理员</b>。</li>
+        <li>管理员权限中勾选<b>「管理话题」</b>（Manage topics）。缺此权限无法建话题。</li>
+        <li>回到这里，在下面的候选群里点「绑定」。</li>
+      </ol>
+    </details>
+
+    <h2 style="margin-top:1rem">候选群</h2>
+    <div id="candidates"></div>
+
+    <div class="field" style="margin-top:0.9rem">
+      <label for="manual-chat-id">或手动填写群组 ID</label>
+      <div class="row">
+        <input type="text" id="manual-chat-id" placeholder="-1001234567890" inputmode="numeric">
+        <button class="btn" id="btn-bind-manual">绑定</button>
+      </div>
+      <div class="desc">在群里发 <code>/id</code> 可查看当前群组 ID。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 设置 ───────────────────────────────────────────────── -->
+<section class="panel" id="panel-settings">
+  <div class="card">
+    <h2>陌生人首次交互</h2>
+    <div class="field">
+      <label for="s-welcome_text">欢迎语</label>
+      <textarea id="s-welcome_text" data-key="welcome_text"></textarea>
+      <div class="desc">陌生人发送 <code>/start</code> 时的回复，此消息不会转发给你。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>转发行为</h2>
+    <div class="field">
+      <label for="s-forward_mode">呈现方式（陌生人 → 你）</label>
+      <select id="s-forward_mode" data-key="forward_mode">
+        <option value="forward">转发（保留发送者名片）</option>
+        <option value="copy">复制（隐藏来源）</option>
+      </select>
+      <div class="desc">
+        你回复时<b>始终使用复制</b>，与此项无关——转发会让对方看到「转发自
+        &lt;中转群名&gt;」，泄露架构。
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="switch">
+        <input type="checkbox" id="s-media_group_enabled" data-key="media_group_enabled">
+        <span>媒体组聚合</span>
+      </label>
+      <div class="desc">一次发送的多张图保持为一组。关闭后会拆成多条独立消息。</div>
+    </div>
+
+    <div class="field">
+      <label class="switch">
+        <input type="checkbox" id="s-sync_edits" data-key="sync_edits">
+        <span>同步消息编辑</span>
+      </label>
+      <div class="desc">
+        任一方编辑消息时同步到另一侧。<b>删除无法同步</b>：Telegram 不向 bot
+        推送删除事件，需在话题内回复该消息并发送 <code>/del</code>（限 48 小时内）。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>限流</h2>
+    <div class="field">
+      <label class="switch">
+        <input type="checkbox" id="s-rate_limit_enabled" data-key="rate_limit_enabled">
+        <span>启用限流</span>
+      </label>
+      <div class="desc">超限的消息直接丢弃，并在对应话题内提示你一次。</div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1;min-width:8rem">
+        <label for="s-rate_limit_max">最大条数</label>
+        <input type="number" id="s-rate_limit_max" data-key="rate_limit_max" min="1" max="100000">
+      </div>
+      <div class="field" style="flex:1;min-width:8rem">
+        <label for="s-rate_limit_window">时间窗口（秒）</label>
+        <input type="number" id="s-rate_limit_window" data-key="rate_limit_window" min="1" max="100000">
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="btn-save-settings">保存设置</button>
+    <span class="muted" id="settings-saved"></span>
+  </div>
+</section>
+
+<!-- ── 用户 ───────────────────────────────────────────────── -->
+<section class="panel" id="panel-users">
+  <div class="card">
+    <h2>用户</h2>
+    <div class="row" style="margin-bottom:0.9rem">
+      <input type="text" id="user-search" placeholder="按姓名、用户名或 ID 搜索">
+      <button class="btn secondary" id="btn-search">搜索</button>
+    </div>
+    <div class="table-wrap"><div id="users-table"></div></div>
+    <div class="row" style="margin-top:0.9rem">
+      <button class="btn secondary" id="btn-prev">上一页</button>
+      <span class="muted" id="users-range"></span>
+      <button class="btn secondary" id="btn-next">下一页</button>
+    </div>
+  </div>
+</section>
+
+<!-- ── 黑名单 ─────────────────────────────────────────────── -->
+<section class="panel" id="panel-bans">
+  <div class="card">
+    <h2>拉黑用户</h2>
+    <div class="row">
+      <input type="text" id="ban-id" placeholder="用户 ID" inputmode="numeric">
+      <input type="text" id="ban-reason" placeholder="原因（可选）">
+      <button class="btn danger" id="btn-ban">拉黑</button>
+    </div>
+    <div class="desc" style="margin-top:0.5rem">
+      被拉黑者的消息会被<b>静默丢弃</b>，不会收到任何提示——告知只会促使其换号绕过。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>黑名单</h2>
+    <div class="table-wrap"><div id="bans-table"></div></div>
+  </div>
+</section>
+
+<!-- ── 运维 ───────────────────────────────────────────────── -->
+<section class="panel" id="panel-maintenance">
+  <div class="card">
+    <h2>Webhook</h2>
+    <div id="webhook-status"></div>
+    <div class="row" style="margin-top:0.9rem">
+      <button class="btn secondary" id="btn-webhook-check">检查</button>
+      <button class="btn" id="btn-webhook-set">重设 Webhook</button>
+    </div>
+    <div class="desc" style="margin-top:0.5rem">
+      Webhook 地址与密钥均由 BOT_TOKEN 派生，无需手动配置。更换 token 后需重设。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>数据清理</h2>
+    <p class="muted" style="margin-top:0">
+      每日自动执行。清理过期的去重记录、会话、登录令牌，以及 60 天前的消息映射。
+    </p>
+    <button class="btn secondary" id="btn-cleanup">立即清理</button>
+    <div id="cleanup-result" style="margin-top:0.75rem"></div>
+  </div>
+
+  <div class="card">
+    <h2>会话</h2>
+    <p class="muted" style="margin-top:0">
+      失效所有网页会话，包括当前这个。也可以在 Telegram 里发送 <code>/revoke</code>。
+    </p>
+    <button class="btn danger" id="btn-revoke-all">失效所有会话</button>
+  </div>
+
+  <div class="card">
+    <h2>恢复与备份</h2>
+    <ul class="muted" style="margin:0;padding-left:1.2rem">
+      <li>D1 Time Travel 始终开启，免费版可回溯 <b>7 天</b>：<code>wrangler d1 time-travel restore pmbot-db --timestamp=…</code></li>
+      <li>实时日志：<code>wrangler tail</code></li>
+      <li>数据库迁移：<code>npm run db:migrate</code></li>
+      <li>丢失控制台访问：给 bot 发 <code>/claim &lt;认领码&gt;</code>，认领码由 <code>npm run claim-code</code> 生成。</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
