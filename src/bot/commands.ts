@@ -1,4 +1,4 @@
-import type { CallbackQuery, Message } from "grammy/types";
+import type { CallbackQuery, Message, ParseMode } from "grammy/types";
 import { createLoginNonce, revokeAllSessions } from "../lib/auth";
 import { deriveClaimCode, timingSafeEqual } from "../lib/crypto";
 import {
@@ -46,7 +46,7 @@ export async function handleOwnerPrivateCommand(
   const fromId = msg.from?.id;
   if (!fromId) return false;
 
-  const { env, api, settings } = ctx;
+  const { api, settings } = ctx;
 
   // /claim is the bootstrap: it is the only command available before an owner
   // exists, and the only one whose authorisation is not "are you the owner".
@@ -57,27 +57,57 @@ export async function handleOwnerPrivateCommand(
 
   const isOwner = settings.ownerId !== null && settings.ownerId === fromId;
 
-  switch (cmd) {
-    case "/start":
-      if (!isOwner) return false; // Fall through to the visitor welcome text.
-      await api.sendMessage(
-        fromId,
-        "PM bot is running. Use /login to open the web console, " +
-          "/help for the full command list.",
-      );
-      return true;
+  if (cmd === "/start") {
+    if (!isOwner) return false; // Fall through to the visitor welcome text.
+    await api.sendMessage(
+      fromId,
+      "PM bot is running. Use /login to open the web console, " +
+        "/help for the full command list.",
+    );
+    return true;
+  }
 
+  if (!isOwner) return false;
+
+  if (
+    await handleGlobalAdminCommand(ctx, cmd, origin, (text, opts) =>
+      api.sendMessage(fromId, text, opts),
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Options accepted by the global admin command reply callback. */
+type ReplyOpts = {
+  parse_mode?: ParseMode;
+  link_preview_options?: { is_disabled: boolean };
+};
+
+/**
+ * The owner-scoped admin commands that are chat-agnostic, so they work in the
+ * private chat and anywhere in the relay group, including the General topic.
+ * Returns true when the command was handled.
+ */
+async function handleGlobalAdminCommand(
+  ctx: BotContext,
+  cmd: string,
+  origin: URL,
+  reply: (text: string, opts?: ReplyOpts) => Promise<unknown>,
+): Promise<Handled> {
+  const { env } = ctx;
+
+  switch (cmd) {
     case "/help":
-      if (!isOwner) return false;
-      await api.sendMessage(fromId, HELP_TEXT, { parse_mode: "HTML" });
+      await reply(HELP_TEXT, { parse_mode: "HTML" });
       return true;
 
     case "/login": {
-      if (!isOwner) return false;
       const nonce = await createLoginNonce(env);
       const url = `${origin.origin}/auth/${nonce}`;
-      await api.sendMessage(
-        fromId,
+      await reply(
         `<a href="${escapeHtml(url)}">Open web console</a>\n\n` +
           "Single use, valid for 2 minutes. Run /login again for another link " +
           "(for example to open it on your desktop).",
@@ -87,24 +117,53 @@ export async function handleOwnerPrivateCommand(
     }
 
     case "/revoke": {
-      if (!isOwner) return false;
       const n = await revokeAllSessions(env);
-      await api.sendMessage(fromId, `Revoked ${n} web session(s).`);
+      await reply(`Revoked ${n} web session(s).`);
       return true;
     }
 
-    case "/status": {
-      if (!isOwner) return false;
-      await api.sendMessage(fromId, await buildStatus(ctx, origin), {
+    case "/status":
+      await reply(await buildStatus(ctx, origin), {
         parse_mode: "HTML",
         link_preview_options: { is_disabled: true },
       });
       return true;
-    }
 
     default:
       return false;
   }
+}
+
+/**
+ * Owner-scoped config commands accepted only in the relay group's General
+ * topic (which arrives without a thread id). Inside a named topic they are
+ * not commands at all: the message falls through and is relayed to the
+ * correspondent as-is. Run before the topic-scoped handler so /login & co.
+ * in the General topic are never relayed outbound.
+ */
+export async function handleRelayAdminCommand(
+  ctx: BotContext,
+  msg: Message,
+  origin: URL,
+): Promise<Handled> {
+  const text = msg.text ?? "";
+  if (!text.startsWith("/")) return false;
+
+  const cmd = text.split(/[\s@]/)[0]!.toLowerCase();
+  const { api, settings } = ctx;
+  const fromId = msg.from?.id;
+  if (!fromId || fromId !== settings.ownerId) return false;
+
+  // A thread id means a named topic; config commands belong in the General
+  // topic only, so let it fall through to normal relaying.
+  if (msg.message_thread_id) return false;
+
+  const reply = (t: string, opts?: ReplyOpts) =>
+    api
+      .sendMessage(msg.chat.id, t, opts)
+      .catch((e) => logError("admin-reply", e));
+
+  return handleGlobalAdminCommand(ctx, cmd, origin, reply);
 }
 
 /**
@@ -523,11 +582,12 @@ async function buildStatus(ctx: BotContext, origin: URL): Promise<string> {
   return lines.join("\n");
 }
 
-const HELP_TEXT = `<b>Owner commands (this chat)</b>
+const HELP_TEXT = `<b>Owner commands (private chat or the General topic)</b>
 /login — one-time link to the web console
 /status — current configuration
 /revoke — invalidate every web session
-/claim &lt;code&gt; — (re)establish ownership
+/help — this list
+/claim &lt;code&gt; — (re)establish ownership (private chat only)
 
 <b>Inside a topic in the relay group</b>
 /ban [id] [reason] — block a correspondent
@@ -539,6 +599,7 @@ const HELP_TEXT = `<b>Owner commands (this chat)</b>
 /del — delete a message on both sides (reply to it first; 48h limit)
 /id — show chat and thread ids
 
+In the General topic moderation commands need an explicit id.
 Deleting a message normally is <i>not</i> mirrored: Telegram sends no deletion
 update to bots, so /del is the only way.`;
 

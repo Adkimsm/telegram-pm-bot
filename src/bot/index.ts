@@ -12,6 +12,7 @@ import type { Env, Settings } from "../lib/types";
 import {
   handleCallbackQuery,
   handleOwnerPrivateCommand,
+  handleRelayAdminCommand,
   handleRelayGroupCommand,
 } from "./commands";
 import type { BotContext } from "./context";
@@ -100,6 +101,7 @@ export async function processUpdate(
       // Ignore the bot's own messages to avoid an echo loop.
       if (msg.from?.is_bot) return;
 
+      if (await handleRelayAdminCommand(ctx, msg, origin)) return;
       if (await handleRelayGroupCommand(ctx, msg)) return;
       await handleOutgoing(ctx, msg);
     }

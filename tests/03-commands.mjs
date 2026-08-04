@@ -193,5 +193,50 @@ section("/revoke clears sessions");
   t("count reported", String(last("sendMessage")?.args[1]).includes("2"));
 }
 
+section("/login works from the relay General topic");
+{
+  const env = await makeEnv();
+  resetApi();
+  await run(env, grp({ text: "/login", message_thread_id: null }));
+  const body = String(last("sendMessage")?.args[1]);
+  t("link issued", /\/auth\/[A-Za-z0-9_-]+/.test(body), body.slice(0, 90));
+  t("nonce stored hashed", (await env.DB.prepare("SELECT COUNT(*) AS n FROM login_nonces").first()).n === 1);
+  t("replied in the group, not a private message", called("sendMessage").every((c) => c.args[0] === RELAY));
+}
+
+section("/login from a named topic is relayed to the correspondent, not handled");
+{
+  const env = await makeEnv();
+  resetApi();
+  await run(env, grp({ text: "/login", message_thread_id: THREAD }));
+  t("no nonce created", (await env.DB.prepare("SELECT COUNT(*) AS n FROM login_nonces").first()).n === 0);
+  t("no admin reply in the topic", called("sendMessage").length === 0);
+  t("relayed to the correspondent as-is", called("copyMessage").length === 1);
+}
+
+section("/status and /revoke work from the relay General topic");
+{
+  const env = await makeEnv();
+  await env.DB.prepare("INSERT INTO sessions (token_hash,created_at,expires_at,user_agent) VALUES (?,?,?,?)").bind("h1", 1, 9999999999, "").run();
+  resetApi();
+  await run(env, grp({ text: "/status", message_thread_id: null }));
+  t("status body delivered", String(last("sendMessage")?.args[1]).includes("<b>Status</b>"));
+  t("owner id present", String(last("sendMessage")?.args[1]).includes(`<code>${OWNER}</code>`));
+
+  resetApi();
+  await run(env, grp({ text: "/revoke", message_thread_id: null }));
+  t("sessions cleared from the group", (await env.DB.prepare("SELECT COUNT(*) AS n FROM sessions").first()).n === 0);
+  t("count reported", String(last("sendMessage")?.args[1]).includes("1"));
+}
+
+section("admin commands from a stranger in the relay group are relayed, not executed");
+{
+  const env = await makeEnv();
+  resetApi();
+  await run(env, grp({ from_id: 333333, text: "/login", message_thread_id: THREAD }));
+  t("no login nonce issued", (await env.DB.prepare("SELECT COUNT(*) AS n FROM login_nonces").first()).n === 0);
+  t("relayed outbound instead of handled", called("copyMessage").length === 1);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
