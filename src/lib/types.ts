@@ -34,6 +34,16 @@ export interface Settings {
    */
   syncReactions: boolean;
   mediaGroupEnabled: boolean;
+  /** Gate first contact behind a challenge in the private chat. */
+  humanVerifyEnabled: boolean;
+  /** How long a pending challenge stays valid, in seconds. */
+  humanVerifyTimeout: number;
+  /** Wrong attempts allowed before a temporary ban kicks in. */
+  humanVerifyMaxAttempts: number;
+  /** Length of the temporary ban after too many failures, in minutes. */
+  humanVerifyBanMinutes: number;
+  /** Text shown above the challenge itself. */
+  humanVerifyPrompt: string;
 }
 
 export interface UserRow {
@@ -48,6 +58,13 @@ export interface UserRow {
   rl_window_start: number;
   rl_window_count: number;
   blocked_bot: number;
+  verified_at: number;
+  verify_state: string;
+  verify_nonce: string;
+  verify_answer: string;
+  verify_expires_at: number;
+  verify_attempts: number;
+  temp_banned_until: number;
 }
 
 export interface TopicRow {

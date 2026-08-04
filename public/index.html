@@ -74,6 +74,38 @@
       <textarea id="s-welcome_text" data-key="welcome_text"></textarea>
       <div class="desc">陌生人发送 <code>/start</code> 时的回复，此消息不会转发给你。</div>
     </div>
+
+    <div class="field">
+      <label class="switch">
+        <input type="checkbox" id="s-human_verify_enabled" data-key="human_verify_enabled">
+        <span>启用人机验证</span>
+      </label>
+      <div class="desc">
+        未验证用户必须先完成一题四则运算。默认流程是：先点 <code>/start</code>
+        看见欢迎语与验证题，验证通过后再发送消息。
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field" style="flex:1;min-width:8rem">
+        <label for="s-human_verify_timeout">题目超时（秒）</label>
+        <input type="number" id="s-human_verify_timeout" data-key="human_verify_timeout" min="30" max="3600">
+      </div>
+      <div class="field" style="flex:1;min-width:8rem">
+        <label for="s-human_verify_max_attempts">允许失败次数</label>
+        <input type="number" id="s-human_verify_max_attempts" data-key="human_verify_max_attempts" min="1" max="10">
+      </div>
+      <div class="field" style="flex:1;min-width:8rem">
+        <label for="s-human_verify_ban_minutes">失败后封禁（分钟）</label>
+        <input type="number" id="s-human_verify_ban_minutes" data-key="human_verify_ban_minutes" min="1" max="1440">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="s-human_verify_prompt">验证提示语</label>
+      <textarea id="s-human_verify_prompt" data-key="human_verify_prompt"></textarea>
+      <div class="desc">会显示在运算题前面。欢迎语仍由上面的欢迎语单独控制。</div>
+    </div>
   </div>
 
   <div class="card">

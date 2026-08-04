@@ -11,6 +11,11 @@ const DEFAULTS: Settings = {
   syncEdits: true,
   syncReactions: false,
   mediaGroupEnabled: true,
+  humanVerifyEnabled: false,
+  humanVerifyTimeout: 300,
+  humanVerifyMaxAttempts: 2,
+  humanVerifyBanMinutes: 10,
+  humanVerifyPrompt: "请先完成验证，再继续发送消息。",
 };
 
 /** Keys the web UI is allowed to write, with validation for each. */
@@ -24,6 +29,11 @@ export const EDITABLE_KEYS = {
   sync_edits: "bool",
   sync_reactions: "bool",
   media_group_enabled: "bool",
+  human_verify_enabled: "bool",
+  human_verify_timeout: "positive-int",
+  human_verify_max_attempts: "positive-int",
+  human_verify_ban_minutes: "positive-int",
+  human_verify_prompt: "text",
 } as const;
 
 export type EditableKey = keyof typeof EDITABLE_KEYS;
@@ -83,6 +93,24 @@ export async function loadSettings(env: Env): Promise<Settings> {
       map.get("media_group_enabled"),
       DEFAULTS.mediaGroupEnabled,
     ),
+    humanVerifyEnabled: parseBool(
+      map.get("human_verify_enabled"),
+      DEFAULTS.humanVerifyEnabled,
+    ),
+    humanVerifyTimeout: parsePositiveInt(
+      map.get("human_verify_timeout"),
+      DEFAULTS.humanVerifyTimeout,
+    ),
+    humanVerifyMaxAttempts: parsePositiveInt(
+      map.get("human_verify_max_attempts"),
+      DEFAULTS.humanVerifyMaxAttempts,
+    ),
+    humanVerifyBanMinutes: parsePositiveInt(
+      map.get("human_verify_ban_minutes"),
+      DEFAULTS.humanVerifyBanMinutes,
+    ),
+    humanVerifyPrompt:
+      map.get("human_verify_prompt") ?? DEFAULTS.humanVerifyPrompt,
   };
 }
 

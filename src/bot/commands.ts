@@ -3,6 +3,7 @@ import { createLoginNonce, revokeAllSessions } from "../lib/auth";
 import { deriveClaimCode, timingSafeEqual } from "../lib/crypto";
 import {
   banUser,
+  clearVerification,
   deleteMapping,
   findByRelayMsg,
   getTopicByThread,
@@ -10,6 +11,8 @@ import {
   getUser,
   isBanned,
   listBans,
+  now,
+  setVerified,
   unbanUser,
 } from "../lib/db";
 import {
@@ -263,7 +266,44 @@ export async function handleRelayGroupCommand(
         await reply(`No record for <code>${targetId}</code>.`);
         return true;
       }
-      await reply(buildInfoCard(user, await isBanned(env, targetId)));
+      const lines = [buildInfoCard(user, await isBanned(env, targetId))];
+      lines.push(
+        `Verification: ${user.verified_at ? "passed" : "pending"}`,
+      );
+      if (user.temp_banned_until > now()) {
+        lines.push(`Verify cooldown until: <code>${user.temp_banned_until}</code>`);
+      }
+      await reply(lines.join("\n"));
+      return true;
+    }
+
+    case "/verify": {
+      if (targetId === null) {
+        await reply("Usage: /verify [user_id] — inside a topic the id is optional.");
+        return true;
+      }
+      const user = await getUser(env, targetId);
+      if (!user) {
+        await reply(`No record for <code>${targetId}</code>.`);
+        return true;
+      }
+      await setVerified(env, targetId);
+      await reply(`✅ Marked <code>${targetId}</code> as verified.`);
+      return true;
+    }
+
+    case "/unverify": {
+      if (targetId === null) {
+        await reply("Usage: /unverify [user_id] — inside a topic the id is optional.");
+        return true;
+      }
+      const user = await getUser(env, targetId);
+      if (!user) {
+        await reply(`No record for <code>${targetId}</code>.`);
+        return true;
+      }
+      await clearVerification(env, targetId);
+      await reply(`♻️ Reset verification for <code>${targetId}</code>.`);
       return true;
     }
 
@@ -471,6 +511,12 @@ async function buildStatus(ctx: BotContext, origin: URL): Promise<string> {
         : "off"
     }`,
     `Edit sync: ${settings.syncEdits ? "on" : "off"}`,
+    `Reaction sync: ${settings.syncReactions ? "on" : "off"}`,
+    `Human verify: ${
+      settings.humanVerifyEnabled
+        ? `${settings.humanVerifyMaxAttempts} tries, ${settings.humanVerifyBanMinutes}m cooldown`
+        : "off"
+    }`,
     `Media groups: ${settings.mediaGroupEnabled ? "on" : "off"}`,
     `Console: ${escapeHtml(origin.origin)}`,
   ];
@@ -488,6 +534,8 @@ const HELP_TEXT = `<b>Owner commands (this chat)</b>
 /unban [id]
 /bans — list blocked correspondents
 /info [id] — identity and counters
+/verify [id] — mark a correspondent as verified
+/unverify [id] — force them through the challenge again
 /del — delete a message on both sides (reply to it first; 48h limit)
 /id — show chat and thread ids
 

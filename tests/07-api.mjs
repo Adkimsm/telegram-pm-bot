@@ -8,6 +8,8 @@ import { cleanup } from "./.build/src/lib/db.js";
 import worker from "./.build/src/index.js";
 
 const SCHEMA = new URL("../migrations/0001_init.sql", import.meta.url).pathname;
+const MIGRATION2 = new URL("../migrations/0002_reactions.sql", import.meta.url).pathname;
+const MIGRATION3 = new URL("../migrations/0003_human_verify.sql", import.meta.url).pathname;
 const TOKEN = "123456789:AAtesttesttesttesttesttesttesttest";
 const OWNER = 111111, RELAY = -1001234567890, STRANGER = 555555, THREAD = 42;
 const BASE = "https://pmbot.example.workers.dev";
@@ -18,6 +20,9 @@ const section = (s) => console.log(`\n### ${s}`);
 
 async function makeEnv({ relay = RELAY } = {}) {
   const db = new D1(SCHEMA);
+  const { readFileSync } = await import("node:fs");
+  db.exec(readFileSync(MIGRATION2, "utf8"));
+  db.exec(readFileSync(MIGRATION3, "utf8"));
   const env = { BOT_TOKEN: TOKEN, DB: db,
     ASSETS: { fetch: async () => new Response("<html>console</html>") } };
   env.MEDIA_GROUP = new DONamespace(MediaGroupBuffer, env);
@@ -192,6 +197,31 @@ section("api: bans");
   t("username rejected", res.status === 400);
   res = await api("bans", { method: "POST", body: JSON.stringify({}) });
   t("missing id rejected", res.status === 400);
+}
+
+section("api: manual verification");
+{
+  const env = await makeEnv();
+  const api = await authed(env);
+
+  let res = await api("verify", { method: "POST", body: JSON.stringify({ user_id: STRANGER }) });
+  t("verify endpoint accepts a known user", res.status === 200);
+  t(
+    "verified_at set",
+    (await env.DB.prepare("SELECT verified_at FROM users WHERE user_id=?").bind(STRANGER).first()).verified_at > 0,
+  );
+
+  res = await api("verify", { method: "DELETE", body: JSON.stringify({ user_id: STRANGER }) });
+  t("unverify endpoint accepts a known user", res.status === 200);
+  const row = await env.DB.prepare(
+    "SELECT verified_at, verify_state, temp_banned_until FROM users WHERE user_id=?",
+  ).bind(STRANGER).first();
+  t("verification state cleared", row.verified_at === 0 && row.verify_state === "" && row.temp_banned_until === 0);
+
+  res = await api("verify", { method: "POST", body: JSON.stringify({ user_id: "abc" }) });
+  t("verify rejects junk ids", res.status === 400);
+  res = await api("verify", { method: "DELETE", body: JSON.stringify({ user_id: 424242 }) });
+  t("unverify returns 404 for unknown users", res.status === 404);
 }
 
 section("api: bind probes before accepting");

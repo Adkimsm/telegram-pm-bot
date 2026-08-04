@@ -34,6 +34,11 @@ check("bool true", validateSetting("sync_edits","true"), {ok:true,value:"1"});
 check("bool 0", validateSetting("sync_edits","0"), {ok:true,value:"0"});
 check("bool junk->0", validateSetting("sync_edits","maybe"), {ok:true,value:"0"});
 check("sync_reactions editable", validateSetting("sync_reactions","1"), {ok:true,value:"1"});
+check("human_verify_enabled editable", validateSetting("human_verify_enabled","1"), {ok:true,value:"1"});
+check("human_verify_timeout editable", validateSetting("human_verify_timeout","300"), {ok:true,value:"300"});
+check("human_verify_max_attempts editable", validateSetting("human_verify_max_attempts","2"), {ok:true,value:"2"});
+check("human_verify_ban_minutes editable", validateSetting("human_verify_ban_minutes","10"), {ok:true,value:"10"});
+check("human_verify_prompt editable", validateSetting("human_verify_prompt","请先完成验证。"), {ok:true,value:"请先完成验证。"});
 
 check("forward_mode forward", validateSetting("forward_mode","forward"), {ok:true,value:"forward"});
 check("forward_mode copy", validateSetting("forward_mode","copy"), {ok:true,value:"copy"});

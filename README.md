@@ -13,6 +13,7 @@ Telegram 私信中转机器人。陌生人和 bot 私聊，消息落到你的中
 - 回复带引用，对方能看到你在回哪条
 - 双向编辑同步
 - 双向表情回应同步（可选）
+- Telegram 内联按钮四则运算人机验证（可选）
 - 拉黑、限流、用户查询
 - 网页控制台管理全部配置
 - **零自定义环境变量**：只有一个 `BOT_TOKEN` secret
@@ -126,6 +127,8 @@ Bot 会自动检测到这个群。
 | `/unban [id]` | 解除拉黑 |
 | `/bans` | 黑名单列表 |
 | `/info [id]` | 身份与统计 |
+| `/verify [id]` | 手动标记为已验证 |
+| `/unverify [id]` | 重置验证状态，强制重新过题 |
 | `/del` | 回复某条消息后发送，双侧删除 |
 | `/id` | 显示当前群组与话题 ID |
 
@@ -158,6 +161,14 @@ Bot API 文档写着接收 `message_reaction` 需要「the bot must be an admini
 
 开启此功能后**必须重设 webhook**：`message_reaction` 不在 Telegram 的默认订阅集里，而省略 `allowed_updates` 时 Telegram 会保留旧设置。控制台「运维」页会在开关已开但订阅缺失时给出警告，点「重设 Webhook」即可。
 
+### 关于人机验证的一点说明
+
+- 形式：Telegram 内联按钮四则运算题，无需外部 CAPTCHA 服务。
+- 触发：未验证用户在私聊里先点 `/start`，看见欢迎语与题目后再继续发送消息。
+- 失败策略：**允许 2 次**，连续失败后**临时限制 10 分钟**。
+- 设计取舍：不缓存“第一条消息”。在未验证状态下，普通消息会被拦下并提醒先完成当前题目；验证通过后请重新发送。
+- 管理方式：控制台开关与参数 + 中转群内的 `/verify` `/unverify`。
+
 ### 关于 reaction 的两点补充
 
 - 私聊里会收到 `message_reaction` 更新，这个功能已经实测确认可用。
@@ -170,7 +181,7 @@ Bot API 文档写着接收 `message_reaction` 需要「the bot must be an admini
 ### 日常
 
 ```sh
-npm test                # 全部测试（336 项）
+npm test                # 全部测试（371 项）
 npm run check           # 类型检查 + 测试 + 构建检查
 npm run tail            # 实时日志
 npm run webhook-info    # webhook 健康检查

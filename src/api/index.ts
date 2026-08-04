@@ -9,6 +9,7 @@ import {
 import { deriveWebhookSecret } from "../lib/crypto";
 import {
   banUser,
+  clearVerification,
   cleanup,
   deleteTopic,
   getStats,
@@ -16,6 +17,7 @@ import {
   listBans,
   listCandidateChats,
   listUsers,
+  setVerified,
   unbanUser,
 } from "../lib/db";
 import { displayName, parseUserIdArg } from "../lib/format";
@@ -84,6 +86,10 @@ export async function handleApi(
         return await postBan(request, env);
       case "DELETE bans":
         return await deleteBan(request, env);
+      case "POST verify":
+        return await postVerify(request, env);
+      case "DELETE verify":
+        return await deleteVerify(request, env);
       case "GET chats":
         return json({ chats: await listCandidateChats(env) });
       case "POST bind":
@@ -282,6 +288,34 @@ async function deleteBan(request: Request, env: Env): Promise<Response> {
 
   const removed = await unbanUser(env, userId);
   return json({ ok: true, removed, user_id: userId });
+}
+
+async function postVerify(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {
+    user_id?: unknown;
+  } | null;
+  const userId = parseUserIdArg(String(body?.user_id ?? ""));
+  if (userId === null) return badRequest("user_id must be a numeric Telegram id");
+
+  const user = await getUser(env, userId);
+  if (!user) return json({ error: "unknown user" }, { status: 404 });
+
+  await setVerified(env, userId);
+  return json({ ok: true, user_id: userId });
+}
+
+async function deleteVerify(request: Request, env: Env): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {
+    user_id?: unknown;
+  } | null;
+  const userId = parseUserIdArg(String(body?.user_id ?? ""));
+  if (userId === null) return badRequest("user_id must be a numeric Telegram id");
+
+  const user = await getUser(env, userId);
+  if (!user) return json({ error: "unknown user" }, { status: 404 });
+
+  await clearVerification(env, userId);
+  return json({ ok: true, user_id: userId });
 }
 
 /**

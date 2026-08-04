@@ -276,6 +276,11 @@ async function bindChat(chatId) {
 
 function fillSettingsForm(s) {
   $("#s-welcome_text").value = s.welcomeText ?? "";
+  $("#s-human_verify_enabled").checked = !!s.humanVerifyEnabled;
+  $("#s-human_verify_timeout").value = s.humanVerifyTimeout ?? 300;
+  $("#s-human_verify_max_attempts").value = s.humanVerifyMaxAttempts ?? 2;
+  $("#s-human_verify_ban_minutes").value = s.humanVerifyBanMinutes ?? 10;
+  $("#s-human_verify_prompt").value = s.humanVerifyPrompt ?? "";
   $("#s-forward_mode").value = s.forwardMode ?? "forward";
   $("#s-media_group_enabled").checked = !!s.mediaGroupEnabled;
   $("#s-sync_edits").checked = !!s.syncEdits;
@@ -346,6 +351,14 @@ function renderUsers() {
         const flags = [];
         if (u.banned) flags.push('<span class="badge err">已拉黑</span>');
         if (u.blocked_bot) flags.push('<span class="badge warn">已屏蔽 bot</span>');
+        if (u.temp_banned_until && u.temp_banned_until > Math.floor(Date.now() / 1000)) {
+          flags.push('<span class="badge warn">验证冷却中</span>');
+        }
+        flags.push(
+          u.verified_at
+            ? '<span class="badge ok">已验证</span>'
+            : '<span class="badge">未验证</span>',
+        );
         if (!u.thread_id) flags.push('<span class="badge">无话题</span>');
         return `<tr>
           <td>${esc(u.display_name)}</td>
@@ -354,11 +367,18 @@ function renderUsers() {
           <td class="num">${u.msg_count}</td>
           <td title="${absTime(u.last_seen)}">${relTime(u.last_seen)}</td>
           <td>${flags.join(" ") || '<span class="badge ok">正常</span>'}</td>
-          <td>${
-            u.banned
-              ? `<button class="btn secondary" data-unban="${u.user_id}">解除</button>`
-              : `<button class="btn danger" data-ban="${u.user_id}">拉黑</button>`
-          }</td>
+          <td class="row">
+            ${
+              u.banned
+                ? `<button class="btn secondary" data-unban="${u.user_id}">解除</button>`
+                : `<button class="btn danger" data-ban="${u.user_id}">拉黑</button>`
+            }
+            ${
+              u.verified_at
+                ? `<button class="btn secondary" data-unverify="${u.user_id}">重置验证</button>`
+                : `<button class="btn secondary" data-verify="${u.user_id}">手动通过</button>`
+            }
+          </td>
         </tr>`;
       })
       .join("")}</tbody></table>`;
@@ -374,6 +394,12 @@ function renderUsers() {
   );
   el.querySelectorAll("[data-unban]").forEach((b) =>
     b.addEventListener("click", () => unbanUser(b.dataset.unban)),
+  );
+  el.querySelectorAll("[data-verify]").forEach((b) =>
+    b.addEventListener("click", () => verifyUser(b.dataset.verify)),
+  );
+  el.querySelectorAll("[data-unverify]").forEach((b) =>
+    b.addEventListener("click", () => unverifyUser(b.dataset.unverify)),
   );
 }
 
@@ -431,6 +457,26 @@ async function unbanUser(userId) {
     await api("bans", { method: "DELETE", body: JSON.stringify({ user_id: userId }) });
     toast(`已解除 ${userId}`, "ok");
     await Promise.all([loadUsers(), loadBans()]);
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function verifyUser(userId) {
+  try {
+    await api("verify", { method: "POST", body: JSON.stringify({ user_id: userId }) });
+    toast(`已标记 ${userId} 为已验证`, "ok");
+    await loadUsers();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function unverifyUser(userId) {
+  try {
+    await api("verify", { method: "DELETE", body: JSON.stringify({ user_id: userId }) });
+    toast(`已重置 ${userId} 的验证状态`, "ok");
+    await loadUsers();
   } catch (e) {
     toast(e.message, "err");
   }

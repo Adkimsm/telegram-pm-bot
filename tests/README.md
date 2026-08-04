@@ -50,6 +50,7 @@ verified by `npm run dry-run` plus a real deployment.
 | `06-auth.mjs` | webhook secret checks, nonce redemption and replay, session forgery, cookie flags |
 | `07-api.mjs` | every `/api/*` route, auth gate, settings validation, bind probing, CSRF origin check |
 | `08-reactions.mjs` | private-chat reaction updates, mirrored reactions, allowed_updates, auth, fallback rules |
+| `09-human-verify.mjs` | arithmetic challenge flow, retries, cooldown ban, verification gate in private chats |
 
 ## Notable invariants under test
 
@@ -75,3 +76,6 @@ verified by `npm run dry-run` plus a real deployment.
   webhook subscription set, so enabling the feature requires re-registering the
   webhook with that update type included. The tests assert the request list and
   the mirror rules.
+- **Human verification blocks first contact.** An unverified user never reaches
+  the relay path: `/start` yields a challenge, ordinary messages are stopped,
+  and two wrong answers trigger a temporary cooldown.

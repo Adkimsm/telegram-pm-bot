@@ -129,6 +129,13 @@ export async function touchUser(
     rl_window_start: windowStart,
     rl_window_count: windowCount,
     blocked_bot: 0,
+    verified_at: existing?.verified_at ?? 0,
+    verify_state: existing?.verify_state ?? "",
+    verify_nonce: existing?.verify_nonce ?? "",
+    verify_answer: existing?.verify_answer ?? "",
+    verify_expires_at: existing?.verify_expires_at ?? 0,
+    verify_attempts: existing?.verify_attempts ?? 0,
+    temp_banned_until: existing?.temp_banned_until ?? 0,
   };
 
   return { user, isNew: !existing, rateLimited: overLimit, justTripped };
@@ -150,6 +157,144 @@ export async function markBlockedBot(
 ): Promise<void> {
   await env.DB.prepare("UPDATE users SET blocked_bot = ? WHERE user_id = ?")
     .bind(blocked ? 1 : 0, userId)
+    .run();
+}
+
+export interface VerificationChallenge {
+  nonce: string;
+  answer: string;
+  expiresAt: number;
+}
+
+export async function getVerificationState(
+  env: Env,
+  userId: number,
+): Promise<Pick<
+  UserRow,
+  | "verified_at"
+  | "verify_state"
+  | "verify_nonce"
+  | "verify_answer"
+  | "verify_expires_at"
+  | "verify_attempts"
+  | "temp_banned_until"
+> | null> {
+  return env.DB.prepare(
+    `SELECT verified_at, verify_state, verify_nonce, verify_answer,
+            verify_expires_at, verify_attempts, temp_banned_until
+       FROM users WHERE user_id = ?`,
+  )
+    .bind(userId)
+    .first();
+}
+
+export async function setVerified(env: Env, userId: number): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE users
+        SET verified_at = ?,
+            verify_state = '',
+            verify_nonce = '',
+            verify_answer = '',
+            verify_expires_at = 0,
+            verify_attempts = 0,
+            temp_banned_until = 0
+      WHERE user_id = ?`,
+  )
+    .bind(now(), userId)
+    .run();
+}
+
+export async function clearVerification(env: Env, userId: number): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE users
+        SET verified_at = 0,
+            verify_state = '',
+            verify_nonce = '',
+            verify_answer = '',
+            verify_expires_at = 0,
+            verify_attempts = 0,
+            temp_banned_until = 0
+      WHERE user_id = ?`,
+  )
+    .bind(userId)
+    .run();
+}
+
+export async function setTemporaryVerificationBan(
+  env: Env,
+  userId: number,
+  until: number,
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE users
+        SET verified_at = 0,
+            verify_state = '',
+            verify_nonce = '',
+            verify_answer = '',
+            verify_expires_at = 0,
+            verify_attempts = 0,
+            temp_banned_until = ?
+      WHERE user_id = ?`,
+  )
+    .bind(until, userId)
+    .run();
+}
+
+export async function saveVerificationChallenge(
+  env: Env,
+  userId: number,
+  challenge: VerificationChallenge,
+  attempts = 0,
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE users
+        SET verify_state = 'pending',
+            verify_nonce = ?,
+            verify_answer = ?,
+            verify_expires_at = ?,
+            verify_attempts = ?
+      WHERE user_id = ?`,
+  )
+    .bind(challenge.nonce, challenge.answer, challenge.expiresAt, attempts, userId)
+    .run();
+}
+
+export async function bumpVerificationFailure(
+  env: Env,
+  userId: number,
+  until: number | null,
+): Promise<number> {
+  await env.DB.prepare(
+    `UPDATE users
+        SET verify_attempts = verify_attempts + 1,
+            temp_banned_until = COALESCE(?, temp_banned_until)
+      WHERE user_id = ?`,
+  )
+    .bind(until, userId)
+    .run();
+
+  const row = await env.DB.prepare(
+    "SELECT verify_attempts FROM users WHERE user_id = ?",
+  )
+    .bind(userId)
+    .first<{ verify_attempts: number }>();
+  return row?.verify_attempts ?? 0;
+}
+
+export async function resetExpiredChallenge(
+  env: Env,
+  userId: number,
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE users
+        SET verify_state = '',
+            verify_nonce = '',
+            verify_answer = '',
+            verify_expires_at = 0,
+            verify_attempts = 0
+      WHERE user_id = ?`,
+  )
+    .bind(userId)
     .run();
 }
 

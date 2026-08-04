@@ -20,6 +20,7 @@ import { handleEditedMessage } from "./edits";
 import { handleIncoming } from "./inbound";
 import { handleOutgoing } from "./outbound";
 import { handleMessageReaction } from "./reactions";
+import { handleHumanVerification, maybeHandleVerificationCallback } from "./verify";
 
 /**
  * Update types we ask Telegram to send. Anything else is wasted work.
@@ -55,6 +56,9 @@ export async function processUpdate(
 
   try {
     if (update.callback_query) {
+      if (await maybeHandleVerificationCallback(ctx, update.callback_query)) {
+        return;
+      }
       await handleCallbackQuery(ctx, update.callback_query);
       return;
     }
@@ -123,6 +127,8 @@ async function handlePrivate(
 
   // The owner's own private chat is a console, not a conversation to relay.
   if (isOwner) return;
+
+  if (await handleHumanVerification(ctx, msg)) return;
 
   // A visitor's /start gets the configured greeting and is not relayed.
   if (msg.text?.startsWith("/start")) {

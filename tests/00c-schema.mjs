@@ -10,7 +10,7 @@ const SCHEMA = readFileSync(
   new URL("../migrations/0001_init.sql", import.meta.url),
   "utf8",
 );
-const MIGRATIONS = ["0001_init.sql", "0002_reactions.sql"].map((name) =>
+const MIGRATIONS = ["0001_init.sql", "0002_reactions.sql", "0003_human_verify.sql"].map((name) =>
   readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8"),
 );
 
@@ -268,10 +268,15 @@ section("the full migration chain applies in order and is idempotent");
   const map = Object.fromEntries(
     db.prepare("SELECT key, value FROM settings").all().map((r) => [r.key, r.value]),
   );
-  t("schema_version bumped to 2", map.schema_version === "2", map.schema_version);
+  t("schema_version bumped to 3", map.schema_version === "3", map.schema_version);
   // Off by default so upgrading an existing deployment changes nothing until
   // the operator opts in and re-registers the webhook.
   t("sync_reactions added, defaulting to off", map.sync_reactions === "0", map.sync_reactions);
+  t("human verify defaults present",
+    map.human_verify_enabled === "0" &&
+    map.human_verify_timeout === "300" &&
+    map.human_verify_max_attempts === "2" &&
+    map.human_verify_ban_minutes === "10");
 
   const before = db.prepare("SELECT COUNT(*) AS n FROM settings").get().n;
   for (const sql of MIGRATIONS) db.exec(sql);
@@ -280,10 +285,13 @@ section("the full migration chain applies in order and is idempotent");
 
   // A pre-existing deployment that had already turned it on must keep it on.
   db.prepare("UPDATE settings SET value='1' WHERE key='sync_reactions'").run();
+  db.prepare("UPDATE settings SET value='1' WHERE key='human_verify_enabled'").run();
   db.exec(MIGRATIONS[1]);
+  db.exec(MIGRATIONS[2]);
   t(
-    "re-applying does not clobber an operator's choice",
-    db.prepare("SELECT value FROM settings WHERE key='sync_reactions'").get().value === "1",
+    "re-applying does not clobber an operator's choices",
+    db.prepare("SELECT value FROM settings WHERE key='sync_reactions'").get().value === "1" &&
+      db.prepare("SELECT value FROM settings WHERE key='human_verify_enabled'").get().value === "1",
   );
 }
 
