@@ -9,6 +9,7 @@ const DEFAULTS: Settings = {
   rateLimitEnabled: true,
   forwardMode: "forward",
   syncEdits: true,
+  syncReactions: false,
   mediaGroupEnabled: true,
 };
 
@@ -21,6 +22,7 @@ export const EDITABLE_KEYS = {
   rate_limit_enabled: "bool",
   forward_mode: "forward-mode",
   sync_edits: "bool",
+  sync_reactions: "bool",
   media_group_enabled: "bool",
 } as const;
 
@@ -73,6 +75,10 @@ export async function loadSettings(env: Env): Promise<Settings> {
     ),
     forwardMode: map.get("forward_mode") === "copy" ? "copy" : "forward",
     syncEdits: parseBool(map.get("sync_edits"), DEFAULTS.syncEdits),
+    // Off by default: existing deployments must not change behaviour on
+    // upgrade, and enabling it requires re-registering the webhook so that
+    // message_reaction is actually delivered.
+    syncReactions: parseBool(map.get("sync_reactions"), DEFAULTS.syncReactions),
     mediaGroupEnabled: parseBool(
       map.get("media_group_enabled"),
       DEFAULTS.mediaGroupEnabled,

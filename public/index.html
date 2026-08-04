@@ -108,6 +108,19 @@
         推送删除事件，需在话题内回复该消息并发送 <code>/del</code>（限 48 小时内）。
       </div>
     </div>
+
+    <div class="field">
+      <label class="switch">
+        <input type="checkbox" id="s-sync_reactions" data-key="sync_reactions">
+        <span>同步表情回应</span>
+      </label>
+      <div class="desc">
+        双向同步表情回应。受 Telegram 限制：bot 每条消息<b>只能设一个</b>表情，
+        所以对方点多个时只同步第一个标准表情；<b>自定义表情和付费表情无法同步</b>，
+        会被跳过而非替换成其他表情。镜像到话题里的表情显示为 bot 所点。
+        <br>开启后需在「运维」页<b>重设 Webhook</b>，否则 Telegram 不会推送表情事件。
+      </div>
+    </div>
   </div>
 
   <div class="card">

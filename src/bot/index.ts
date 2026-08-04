@@ -19,13 +19,20 @@ import { logError } from "./context";
 import { handleEditedMessage } from "./edits";
 import { handleIncoming } from "./inbound";
 import { handleOutgoing } from "./outbound";
+import { handleMessageReaction } from "./reactions";
 
-/** Update types we ask Telegram to send. Anything else is wasted work. */
+/**
+ * Update types we ask Telegram to send. Anything else is wasted work.
+ *
+ * `message_reaction` is not in Telegram's default set and must be requested
+ * explicitly. Keep this list in sync with scripts/webhook.mjs.
+ */
 export const ALLOWED_UPDATES = [
   "message",
   "edited_message",
   "callback_query",
   "my_chat_member",
+  "message_reaction",
 ] as const;
 
 export async function processUpdate(
@@ -54,6 +61,11 @@ export async function processUpdate(
 
     if (update.my_chat_member) {
       await handleMyChatMember(ctx, update.my_chat_member);
+      return;
+    }
+
+    if (update.message_reaction) {
+      await handleMessageReaction(ctx, update.message_reaction);
       return;
     }
 

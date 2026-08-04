@@ -26,6 +26,13 @@ export interface Settings {
    */
   forwardMode: "forward" | "copy";
   syncEdits: boolean;
+  /**
+   * Mirror emoji reactions in both directions.
+   *
+   * Bots may set only one reaction per message, and cannot use custom or paid
+   * reactions, so this conveys the first standard emoji and nothing else.
+   */
+  syncReactions: boolean;
   mediaGroupEnabled: boolean;
 }
 

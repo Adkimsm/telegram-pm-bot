@@ -33,6 +33,7 @@ check("bool 1", validateSetting("sync_edits","1"), {ok:true,value:"1"});
 check("bool true", validateSetting("sync_edits","true"), {ok:true,value:"1"});
 check("bool 0", validateSetting("sync_edits","0"), {ok:true,value:"0"});
 check("bool junk->0", validateSetting("sync_edits","maybe"), {ok:true,value:"0"});
+check("sync_reactions editable", validateSetting("sync_reactions","1"), {ok:true,value:"1"});
 
 check("forward_mode forward", validateSetting("forward_mode","forward"), {ok:true,value:"forward"});
 check("forward_mode copy", validateSetting("forward_mode","copy"), {ok:true,value:"copy"});

@@ -23,12 +23,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // Must stay in sync with src/bot/index.ts ALLOWED_UPDATES.
 // Telegram keeps the previous setting when the field is omitted, so it is
-// always sent explicitly.
+// always sent explicitly. message_reaction is not in the default set.
 const ALLOWED_UPDATES = [
   "message",
   "edited_message",
   "callback_query",
   "my_chat_member",
+  "message_reaction",
 ];
 
 function fail(msg) {

@@ -10,6 +10,9 @@ const SCHEMA = readFileSync(
   new URL("../migrations/0001_init.sql", import.meta.url),
   "utf8",
 );
+const MIGRATIONS = ["0001_init.sql", "0002_reactions.sql"].map((name) =>
+  readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8"),
+);
 
 let fails = 0;
 let passN = 0;
@@ -255,6 +258,33 @@ section("cleanup statements are valid");
     }
   }
   t("all four prune statements run", ok);
+}
+
+section("the full migration chain applies in order and is idempotent");
+{
+  const db = new DatabaseSync(":memory:");
+  for (const sql of MIGRATIONS) db.exec(sql);
+
+  const map = Object.fromEntries(
+    db.prepare("SELECT key, value FROM settings").all().map((r) => [r.key, r.value]),
+  );
+  t("schema_version bumped to 2", map.schema_version === "2", map.schema_version);
+  // Off by default so upgrading an existing deployment changes nothing until
+  // the operator opts in and re-registers the webhook.
+  t("sync_reactions added, defaulting to off", map.sync_reactions === "0", map.sync_reactions);
+
+  const before = db.prepare("SELECT COUNT(*) AS n FROM settings").get().n;
+  for (const sql of MIGRATIONS) db.exec(sql);
+  const after = db.prepare("SELECT COUNT(*) AS n FROM settings").get().n;
+  t("re-running the whole chain is a no-op", before === after, `${before} -> ${after}`);
+
+  // A pre-existing deployment that had already turned it on must keep it on.
+  db.prepare("UPDATE settings SET value='1' WHERE key='sync_reactions'").run();
+  db.exec(MIGRATIONS[1]);
+  t(
+    "re-applying does not clobber an operator's choice",
+    db.prepare("SELECT value FROM settings WHERE key='sync_reactions'").get().value === "1",
+  );
 }
 
 console.log(`\n${passN} passed, ${fails} failed`);

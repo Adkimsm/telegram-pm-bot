@@ -279,6 +279,7 @@ function fillSettingsForm(s) {
   $("#s-forward_mode").value = s.forwardMode ?? "forward";
   $("#s-media_group_enabled").checked = !!s.mediaGroupEnabled;
   $("#s-sync_edits").checked = !!s.syncEdits;
+  $("#s-sync_reactions").checked = !!s.syncReactions;
   $("#s-rate_limit_enabled").checked = !!s.rateLimitEnabled;
   $("#s-rate_limit_max").value = s.rateLimitMax ?? 20;
   $("#s-rate_limit_window").value = s.rateLimitWindow ?? 60;
@@ -474,6 +475,27 @@ async function checkWebhook() {
     el.innerHTML = `<table><tbody>${rows
       .map(([k, v]) => `<tr><th style="width:9rem">${k}</th><td>${v}</td></tr>`)
       .join("")}</tbody></table>`;
+
+    // Reaction sync is silently inert unless message_reaction is subscribed,
+    // and Telegram keeps the previous allowed_updates when the field is
+    // omitted — so enabling the setting alone is not enough.
+    const wantsReactions = state.overview?.settings.syncReactions;
+    const subscribed = (info.allowed_updates ?? []).includes("message_reaction");
+    if (wantsReactions && !subscribed) {
+      el.insertAdjacentHTML(
+        "beforeend",
+        '<div class="notice warn" style="margin-top:0.9rem">' +
+          "<b>表情同步已开启，但 Webhook 未订阅 <code>message_reaction</code>。</b> " +
+          "点击下方「重设 Webhook」后生效。</div>",
+      );
+    } else if (wantsReactions && subscribed) {
+      el.insertAdjacentHTML(
+        "beforeend",
+        '<div class="notice ok" style="margin-top:0.9rem">' +
+          "<b>表情同步已启用。</b> Webhook 已订阅 <code>message_reaction</code>。" +
+          "</div>",
+      );
+    }
   } catch (e) {
     el.innerHTML = `<div class="notice err">${esc(e.message)}</div>`;
   }

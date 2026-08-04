@@ -41,7 +41,7 @@ verified by `npm run dry-run` plus a real deployment.
 |---|---|
 | `00-units.mjs` | settings validation, text formatting, HTML escaping |
 | `00b-crypto.mjs` | key derivation parity with `scripts/`, constant-time compare, token format |
-| `00c-schema.mjs` | migration idempotency, constraints, indexes, every SQL shape in `db.ts` |
+| `00c-schema.mjs` | migration idempotency, constraints, indexes, every SQL shape in `db.ts`, full migration chain |
 | `01-inbound.mjs` | topic creation, info card, forwarding, dedup, `/start`, ban drop |
 | `02-outbound.mjs` | `copyMessage` (never forward), reply quoting, stale-reply fallback, blocked users |
 | `03-commands.mjs` | `/claim` `/login` `/revoke` `/ban` `/unban` `/info` `/del` `/id`, authorisation |
@@ -49,6 +49,7 @@ verified by `npm run dry-run` plus a real deployment.
 | `05-edits-membership.mjs` | edit mirroring both ways, block/unblock, group candidates, topic recovery |
 | `06-auth.mjs` | webhook secret checks, nonce redemption and replay, session forgery, cookie flags |
 | `07-api.mjs` | every `/api/*` route, auth gate, settings validation, bind probing, CSRF origin check |
+| `08-reactions.mjs` | private-chat reaction updates, mirrored reactions, allowed_updates, auth, fallback rules |
 
 ## Notable invariants under test
 
@@ -70,3 +71,7 @@ verified by `npm run dry-run` plus a real deployment.
   re-emitted through `forwardMessages`/`copyMessages` with strictly increasing
   ids; a length mismatch in the response records no mappings rather than wrong
   ones.
+- **Reaction sync is opt-in.** `message_reaction` is not in Telegram's default
+  webhook subscription set, so enabling the feature requires re-registering the
+  webhook with that update type included. The tests assert the request list and
+  the mirror rules.
