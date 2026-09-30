@@ -15,6 +15,9 @@ const DEFAULTS: Settings = {
   humanVerifyTimeout: 300,
   humanVerifyMaxAttempts: 2,
   humanVerifyBanMinutes: 10,
+  humanVerifyRounds: 2,
+  humanVerifyMinSeconds: 2,
+  humanVerifyEscalate: true,
   humanVerifyPrompt: "请先完成验证，再继续发送消息。",
 };
 
@@ -33,6 +36,9 @@ export const EDITABLE_KEYS = {
   human_verify_timeout: "positive-int",
   human_verify_max_attempts: "positive-int",
   human_verify_ban_minutes: "positive-int",
+  human_verify_rounds: "positive-int",
+  human_verify_min_seconds: "non-negative-int",
+  human_verify_escalate: "bool",
   human_verify_prompt: "text",
 } as const;
 
@@ -58,6 +64,15 @@ function parseBool(raw: string | undefined, fallback: boolean): boolean {
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
   return Number.isSafeInteger(n) && n > 0 ? n : fallback;
+}
+
+/**
+ * Unlike {@link parsePositiveInt}, 0 is a meaningful value here: it turns the
+ * minimum-answer-time check off entirely.
+ */
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n >= 0 ? n : fallback;
 }
 
 export async function loadSettings(env: Env): Promise<Settings> {
@@ -109,6 +124,18 @@ export async function loadSettings(env: Env): Promise<Settings> {
       map.get("human_verify_ban_minutes"),
       DEFAULTS.humanVerifyBanMinutes,
     ),
+    humanVerifyRounds: parsePositiveInt(
+      map.get("human_verify_rounds"),
+      DEFAULTS.humanVerifyRounds,
+    ),
+    humanVerifyMinSeconds: parseNonNegativeInt(
+      map.get("human_verify_min_seconds"),
+      DEFAULTS.humanVerifyMinSeconds,
+    ),
+    humanVerifyEscalate: parseBool(
+      map.get("human_verify_escalate"),
+      DEFAULTS.humanVerifyEscalate,
+    ),
     humanVerifyPrompt:
       map.get("human_verify_prompt") ?? DEFAULTS.humanVerifyPrompt,
   };
@@ -157,6 +184,17 @@ export function validateSetting(key: string, raw: unknown): ValidationResult {
       const n = Number(s);
       if (!Number.isSafeInteger(n) || n <= 0) {
         return { ok: false, error: `${key} must be a positive integer` };
+      }
+      if (n > 100_000) {
+        return { ok: false, error: `${key} is unreasonably large` };
+      }
+      return { ok: true, value: String(n) };
+    }
+    case "non-negative-int": {
+      const n = Number(s);
+      // 0 is valid and means "disabled" for the settings that use this kind.
+      if (!Number.isSafeInteger(n) || n < 0) {
+        return { ok: false, error: `${key} must be a non-negative integer` };
       }
       if (n > 100_000) {
         return { ok: false, error: `${key} is unreasonably large` };

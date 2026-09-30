@@ -135,6 +135,9 @@ export async function touchUser(
     verify_answer: existing?.verify_answer ?? "",
     verify_expires_at: existing?.verify_expires_at ?? 0,
     verify_attempts: existing?.verify_attempts ?? 0,
+    verify_step: existing?.verify_step ?? 0,
+    verify_issued_at: existing?.verify_issued_at ?? 0,
+    verify_strikes: existing?.verify_strikes ?? 0,
     temp_banned_until: existing?.temp_banned_until ?? 0,
   };
 
@@ -164,6 +167,8 @@ export interface VerificationChallenge {
   nonce: string;
   answer: string;
   expiresAt: number;
+  /** When the challenge was issued, used for the too-fast-answer check. */
+  issuedAt: number;
 }
 
 export async function getVerificationState(
@@ -177,11 +182,15 @@ export async function getVerificationState(
   | "verify_answer"
   | "verify_expires_at"
   | "verify_attempts"
+  | "verify_step"
+  | "verify_issued_at"
+  | "verify_strikes"
   | "temp_banned_until"
 > | null> {
   return env.DB.prepare(
     `SELECT verified_at, verify_state, verify_nonce, verify_answer,
-            verify_expires_at, verify_attempts, temp_banned_until
+            verify_expires_at, verify_attempts, verify_step, verify_issued_at,
+            verify_strikes, temp_banned_until
        FROM users WHERE user_id = ?`,
   )
     .bind(userId)
@@ -197,6 +206,9 @@ export async function setVerified(env: Env, userId: number): Promise<void> {
             verify_answer = '',
             verify_expires_at = 0,
             verify_attempts = 0,
+            verify_step = 0,
+            verify_issued_at = 0,
+            verify_strikes = 0,
             temp_banned_until = 0
       WHERE user_id = ?`,
   )
@@ -204,6 +216,13 @@ export async function setVerified(env: Env, userId: number): Promise<void> {
     .run();
 }
 
+/**
+ * Reset verification at the operator's request.
+ *
+ * Strikes are cleared too: this is a deliberate "start over" for a known
+ * correspondent, not a punishment, so a stale cooldown history should not
+ * follow them back into the challenge.
+ */
 export async function clearVerification(env: Env, userId: number): Promise<void> {
   await env.DB.prepare(
     `UPDATE users
@@ -213,6 +232,9 @@ export async function clearVerification(env: Env, userId: number): Promise<void>
             verify_answer = '',
             verify_expires_at = 0,
             verify_attempts = 0,
+            verify_step = 0,
+            verify_issued_at = 0,
+            verify_strikes = 0,
             temp_banned_until = 0
       WHERE user_id = ?`,
   )
@@ -220,7 +242,13 @@ export async function clearVerification(env: Env, userId: number): Promise<void>
     .run();
 }
 
-export async function setTemporaryVerificationBan(
+/**
+ * Apply a cooldown after too many failures and count the failure cycle.
+ *
+ * `verify_strikes` only ever grows here, which is what makes the next cooldown
+ * longer; it is cleared by `setVerified` and by an explicit `clearVerification`.
+ */
+export async function applyVerificationBan(
   env: Env,
   userId: number,
   until: number,
@@ -233,6 +261,9 @@ export async function setTemporaryVerificationBan(
             verify_answer = '',
             verify_expires_at = 0,
             verify_attempts = 0,
+            verify_step = 0,
+            verify_issued_at = 0,
+            verify_strikes = verify_strikes + 1,
             temp_banned_until = ?
       WHERE user_id = ?`,
   )
@@ -245,6 +276,7 @@ export async function saveVerificationChallenge(
   userId: number,
   challenge: VerificationChallenge,
   attempts = 0,
+  step = 0,
 ): Promise<void> {
   await env.DB.prepare(
     `UPDATE users
@@ -252,25 +284,32 @@ export async function saveVerificationChallenge(
             verify_nonce = ?,
             verify_answer = ?,
             verify_expires_at = ?,
-            verify_attempts = ?
+            verify_attempts = ?,
+            verify_step = ?,
+            verify_issued_at = ?
       WHERE user_id = ?`,
   )
-    .bind(challenge.nonce, challenge.answer, challenge.expiresAt, attempts, userId)
+    .bind(
+      challenge.nonce,
+      challenge.answer,
+      challenge.expiresAt,
+      attempts,
+      step,
+      challenge.issuedAt,
+      userId,
+    )
     .run();
 }
 
+/** Count one wrong answer and return the new total for the current cycle. */
 export async function bumpVerificationFailure(
   env: Env,
   userId: number,
-  until: number | null,
 ): Promise<number> {
   await env.DB.prepare(
-    `UPDATE users
-        SET verify_attempts = verify_attempts + 1,
-            temp_banned_until = COALESCE(?, temp_banned_until)
-      WHERE user_id = ?`,
+    "UPDATE users SET verify_attempts = verify_attempts + 1 WHERE user_id = ?",
   )
-    .bind(until, userId)
+    .bind(userId)
     .run();
 
   const row = await env.DB.prepare(
@@ -281,6 +320,13 @@ export async function bumpVerificationFailure(
   return row?.verify_attempts ?? 0;
 }
 
+/**
+ * Drop an expired challenge.
+ *
+ * The current round restarts from zero, but `verify_strikes` is deliberately
+ * left alone: letting a challenge lapse is not a way to forget a history of
+ * failed attempts.
+ */
 export async function resetExpiredChallenge(
   env: Env,
   userId: number,
@@ -291,7 +337,9 @@ export async function resetExpiredChallenge(
             verify_nonce = '',
             verify_answer = '',
             verify_expires_at = 0,
-            verify_attempts = 0
+            verify_attempts = 0,
+            verify_step = 0,
+            verify_issued_at = 0
       WHERE user_id = ?`,
   )
     .bind(userId)

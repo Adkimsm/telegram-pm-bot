@@ -148,8 +148,12 @@ section("session: verification, forgery and revocation");
   t("garbage rejected", (await verifySession(env, "garbage")) === false);
   t("no-dot rejected", (await verifySession(env, "abcdef")) === false);
   // Tampering the signature must fail before any database lookup.
+  // The replacement character depends on the last one: appending a fixed "A"
+  // is a no-op whenever the signature already ends in "A", which made this
+  // assertion fail about once in sixty-four runs.
   const [raw, sig] = [token.slice(0, token.lastIndexOf(".")), token.slice(token.lastIndexOf(".") + 1)];
-  t("tampered signature rejected", (await verifySession(env, `${raw}.${sig.slice(0, -1)}A`)) === false);
+  const flipped = sig.at(-1) === "A" ? "B" : "A";
+  t("tampered signature rejected", (await verifySession(env, `${raw}.${sig.slice(0, -1)}${flipped}`)) === false);
   t("swapped random part rejected", (await verifySession(env, `AAAA${raw.slice(4)}.${sig}`)) === false);
   // A signature valid under a different token must not verify.
   const other = { ...env, BOT_TOKEN: "999:BBotherotherotherotherotherother" };

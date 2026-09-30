@@ -21,7 +21,7 @@ import { handleEditedMessage } from "./edits";
 import { handleIncoming } from "./inbound";
 import { handleOutgoing } from "./outbound";
 import { handleMessageReaction } from "./reactions";
-import { handleHumanVerification, maybeHandleVerificationCallback } from "./verify";
+import { handleHumanVerification } from "./verify";
 
 /**
  * Update types we ask Telegram to send. Anything else is wasted work.
@@ -57,9 +57,6 @@ export async function processUpdate(
 
   try {
     if (update.callback_query) {
-      if (await maybeHandleVerificationCallback(ctx, update.callback_query)) {
-        return;
-      }
       await handleCallbackQuery(ctx, update.callback_query);
       return;
     }

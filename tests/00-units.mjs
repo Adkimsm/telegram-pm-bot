@@ -1,5 +1,6 @@
 const { validateSetting, EDITABLE_KEYS } = await import("./.build/src/lib/settings.js");
 const fmt = await import("./.build/src/lib/format.js");
+const vfy = await import("./.build/src/lib/verify.js");
 
 let fails = 0, passN = 0;
 const check = (name, got, want) => {
@@ -38,6 +39,13 @@ check("human_verify_enabled editable", validateSetting("human_verify_enabled","1
 check("human_verify_timeout editable", validateSetting("human_verify_timeout","300"), {ok:true,value:"300"});
 check("human_verify_max_attempts editable", validateSetting("human_verify_max_attempts","2"), {ok:true,value:"2"});
 check("human_verify_ban_minutes editable", validateSetting("human_verify_ban_minutes","10"), {ok:true,value:"10"});
+check("human_verify_rounds editable", validateSetting("human_verify_rounds","2"), {ok:true,value:"2"});
+check("human_verify_rounds 0 rejected", validateSetting("human_verify_rounds","0").ok, false);
+// 0 is meaningful for the minimum answer time: it disables the check.
+check("human_verify_min_seconds 0 ok", validateSetting("human_verify_min_seconds","0"), {ok:true,value:"0"});
+check("human_verify_min_seconds neg rejected", validateSetting("human_verify_min_seconds","-1").ok, false);
+check("human_verify_min_seconds junk rejected", validateSetting("human_verify_min_seconds","soon").ok, false);
+check("human_verify_escalate editable", validateSetting("human_verify_escalate","1"), {ok:true,value:"1"});
 check("human_verify_prompt editable", validateSetting("human_verify_prompt","请先完成验证。"), {ok:true,value:"请先完成验证。"});
 
 check("forward_mode forward", validateSetting("forward_mode","forward"), {ok:true,value:"forward"});
@@ -95,6 +103,45 @@ check("blocked-bot noted", banned.includes("blocked the bot"), true);
 const evil = fmt.buildInfoCard({user_id:2,first_name:"<script>alert(1)</script>",last_name:"",username:'a"b',language_code:null,first_seen:1,last_seen:1,msg_count:0,rl_window_start:0,rl_window_count:0,blocked_bot:0}, false);
 check("name escaped", evil.includes("&lt;script&gt;"), true);
 check("no raw script tag", evil.includes("<script>"), false);
+console.log("--- normalizeAnswer / looksLikeAnswer ---");
+check("ascii untouched", vfy.normalizeAnswer(" 42 "), "42");
+// Full-width digits are what a Chinese mobile keyboard produces by default.
+check("full-width digits", vfy.normalizeAnswer("４２"), "42");
+check("full-width minus", vfy.normalizeAnswer("－7"), "-7");
+check("typographic minus", vfy.normalizeAnswer("−7"), "-7");
+check("leading equals stripped", vfy.normalizeAnswer("= 15"), "15");
+check("inner spaces stripped", vfy.normalizeAnswer("1 5"), "15");
+check("looks like an answer", vfy.looksLikeAnswer("42"), true);
+check("full-width answer accepted", vfy.looksLikeAnswer("４２"), true);
+check("negative answer accepted", vfy.looksLikeAnswer("-7"), true);
+// Ordinary chat must not be mistaken for an attempt, or it would burn a try.
+check("prose rejected", vfy.looksLikeAnswer("hello"), false);
+check("empty rejected", vfy.looksLikeAnswer(""), false);
+check("decimal rejected", vfy.looksLikeAnswer("4.2"), false);
+check("too many digits rejected", vfy.looksLikeAnswer("1234567"), false);
+
+console.log("--- makeArithmeticChallenge ---");
+const one = vfy.makeArithmeticChallenge();
+check("prompt asks a question", one.prompt.includes("= ?"), true);
+check("answer is a plain integer", /^\d+$/.test(one.answer), true);
+check("nonce present", one.nonce.length > 0, true);
+// The whole point of the rework: there is no list of options to guess from.
+check("no options offered", one.options === undefined, true);
+
+let allIntegers = true;
+let positive = true;
+let kinds = { add: false, sub: false, mul: false };
+for (let i = 0; i < 200; i++) {
+  const c = vfy.makeArithmeticChallenge();
+  if (!/^\d+$/.test(c.answer)) allIntegers = false;
+  if (Number(c.answer) <= 0) positive = false;
+  if (c.prompt.includes(" + ")) kinds.add = true;
+  if (c.prompt.includes(" - ")) kinds.sub = true;
+  if (c.prompt.includes(" × ")) kinds.mul = true;
+}
+check("every answer is an integer", allIntegers, true);
+check("every answer is positive", positive, true);
+check("all three operators appear", kinds.add && kinds.sub && kinds.mul, true);
 
 console.log(`\n${passN} passed, ${fails} failed`);
 process.exit(fails === 0 ? 0 : 1);

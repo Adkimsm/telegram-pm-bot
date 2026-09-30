@@ -50,7 +50,7 @@ verified by `npm run dry-run` plus a real deployment.
 | `06-auth.mjs` | webhook secret checks, nonce redemption and replay, session forgery, cookie flags |
 | `07-api.mjs` | every `/api/*` route, auth gate, settings validation, bind probing, CSRF origin check |
 | `08-reactions.mjs` | private-chat reaction updates, mirrored reactions, allowed_updates, auth, fallback rules |
-| `09-human-verify.mjs` | arithmetic challenge flow, retries, cooldown ban, verification gate in private chats |
+| `09-human-verify.mjs` | typed arithmetic challenge flow, full-width answers, too-fast rejection, `/start` refreshes, escalating cooldown, verification gate in private chats |
 
 ## Notable invariants under test
 
@@ -77,5 +77,9 @@ verified by `npm run dry-run` plus a real deployment.
   webhook with that update type included. The tests assert the request list and
   the mirror rules.
 - **Human verification blocks first contact.** An unverified user never reaches
-  the relay path: `/start` yields a challenge, ordinary messages are stopped,
-  and two wrong answers trigger a temporary cooldown.
+  the relay path: `/start` yields a typed challenge, ordinary messages are
+  reminded rather than charged, two wrong answers trigger a temporary cooldown,
+  and that cooldown doubles on every repeat failure cycle.
+- **The challenge cannot be guessed or reset.** No inline keyboard is sent, so
+  there is no one-in-four blind guess, and `/start` refreshes the question
+  without clearing the failure count or the rounds already passed.

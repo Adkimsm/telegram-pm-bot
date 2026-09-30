@@ -42,6 +42,16 @@ export interface Settings {
   humanVerifyMaxAttempts: number;
   /** Length of the temporary ban after too many failures, in minutes. */
   humanVerifyBanMinutes: number;
+  /** How many challenges in a row must be answered correctly to pass. */
+  humanVerifyRounds: number;
+  /**
+   * Minimum seconds between issuing a challenge and accepting an answer.
+   * Anything faster than a human could read and type is treated as
+   * automation. 0 disables the check.
+   */
+  humanVerifyMinSeconds: number;
+  /** Double the cooldown for each previous failure cycle (capped at 24h). */
+  humanVerifyEscalate: boolean;
   /** Text shown above the challenge itself. */
   humanVerifyPrompt: string;
 }
@@ -64,6 +74,12 @@ export interface UserRow {
   verify_answer: string;
   verify_expires_at: number;
   verify_attempts: number;
+  /** How many challenges of the current cycle have been answered correctly. */
+  verify_step: number;
+  /** When the current challenge was issued, for the too-fast-answer check. */
+  verify_issued_at: number;
+  /** Completed failure cycles; drives the escalating cooldown. */
+  verify_strikes: number;
   temp_banned_until: number;
 }
 

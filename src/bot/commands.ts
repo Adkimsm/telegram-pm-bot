@@ -327,10 +327,17 @@ export async function handleRelayGroupCommand(
       }
       const lines = [buildInfoCard(user, await isBanned(env, targetId))];
       lines.push(
-        `Verification: ${user.verified_at ? "passed" : "pending"}`,
+        user.verified_at
+          ? "Verification: passed"
+          : user.verify_state === "pending"
+            ? `Verification: pending (${user.verify_step + 1}/${settings.humanVerifyRounds})`
+            : "Verification: not started",
       );
       if (user.temp_banned_until > now()) {
         lines.push(`Verify cooldown until: <code>${user.temp_banned_until}</code>`);
+      }
+      if (user.verify_strikes > 0) {
+        lines.push(`Verify failures: ${user.verify_strikes}`);
       }
       await reply(lines.join("\n"));
       return true;
@@ -573,7 +580,11 @@ async function buildStatus(ctx: BotContext, origin: URL): Promise<string> {
     `Reaction sync: ${settings.syncReactions ? "on" : "off"}`,
     `Human verify: ${
       settings.humanVerifyEnabled
-        ? `${settings.humanVerifyMaxAttempts} tries, ${settings.humanVerifyBanMinutes}m cooldown`
+        ? `${settings.humanVerifyRounds} rounds, ` +
+          `${settings.humanVerifyMaxAttempts} tries, ` +
+          `${settings.humanVerifyMinSeconds}s min answer, ` +
+          `${settings.humanVerifyBanMinutes}m cooldown` +
+          (settings.humanVerifyEscalate ? " (escalating)" : "")
         : "off"
     }`,
     `Media groups: ${settings.mediaGroupEnabled ? "on" : "off"}`,

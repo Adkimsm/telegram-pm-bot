@@ -10,7 +10,12 @@ const SCHEMA = readFileSync(
   new URL("../migrations/0001_init.sql", import.meta.url),
   "utf8",
 );
-const MIGRATIONS = ["0001_init.sql", "0002_reactions.sql", "0003_human_verify.sql"].map((name) =>
+const MIGRATIONS = [
+  "0001_init.sql",
+  "0002_reactions.sql",
+  "0003_human_verify.sql",
+  "0004_human_verify_hardening.sql",
+].map((name) =>
   readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8"),
 );
 
@@ -268,7 +273,7 @@ section("the full migration chain applies in order and is idempotent");
   const map = Object.fromEntries(
     db.prepare("SELECT key, value FROM settings").all().map((r) => [r.key, r.value]),
   );
-  t("schema_version bumped to 3", map.schema_version === "3", map.schema_version);
+  t("schema_version bumped to 4", map.schema_version === "4", map.schema_version);
   // Off by default so upgrading an existing deployment changes nothing until
   // the operator opts in and re-registers the webhook.
   t("sync_reactions added, defaulting to off", map.sync_reactions === "0", map.sync_reactions);
@@ -277,6 +282,13 @@ section("the full migration chain applies in order and is idempotent");
     map.human_verify_timeout === "300" &&
     map.human_verify_max_attempts === "2" &&
     map.human_verify_ban_minutes === "10");
+  // Hardening defaults: two rounds, a minimum thinking time, and a cooldown
+  // that doubles on each repeat failure cycle.
+  t("hardening defaults present",
+    map.human_verify_rounds === "2" &&
+    map.human_verify_min_seconds === "2" &&
+    map.human_verify_escalate === "1",
+    JSON.stringify(map));
 
   const before = db.prepare("SELECT COUNT(*) AS n FROM settings").get().n;
   for (const sql of MIGRATIONS) db.exec(sql);
@@ -288,11 +300,26 @@ section("the full migration chain applies in order and is idempotent");
   db.prepare("UPDATE settings SET value='1' WHERE key='human_verify_enabled'").run();
   db.exec(MIGRATIONS[1]);
   db.exec(MIGRATIONS[2]);
+  db.exec(MIGRATIONS[3]);
   t(
     "re-applying does not clobber an operator's choices",
     db.prepare("SELECT value FROM settings WHERE key='sync_reactions'").get().value === "1" &&
       db.prepare("SELECT value FROM settings WHERE key='human_verify_enabled'").get().value === "1",
   );
+
+  // The new columns must exist with sane defaults on a row that predates them.
+  db.prepare(
+    `INSERT INTO users (user_id,first_name,last_name,username,language_code,
+                        first_seen,last_seen,msg_count,rl_window_start,
+                        rl_window_count,blocked_bot)
+     VALUES (?,?,?,?,?,?,?,?,?,?,0)`,
+  ).run(4242, "Old", "", null, null, 1, 1, 1, 0, 0);
+  const legacy = db.prepare(
+    "SELECT verify_step, verify_issued_at, verify_strikes FROM users WHERE user_id=4242",
+  ).get();
+  t("hardening columns default to 0",
+    legacy.verify_step === 0 && legacy.verify_issued_at === 0 && legacy.verify_strikes === 0,
+    JSON.stringify(legacy));
 }
 
 console.log(`\n${passN} passed, ${fails} failed`);

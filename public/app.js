@@ -280,6 +280,9 @@ function fillSettingsForm(s) {
   $("#s-human_verify_timeout").value = s.humanVerifyTimeout ?? 300;
   $("#s-human_verify_max_attempts").value = s.humanVerifyMaxAttempts ?? 2;
   $("#s-human_verify_ban_minutes").value = s.humanVerifyBanMinutes ?? 10;
+  $("#s-human_verify_rounds").value = s.humanVerifyRounds ?? 2;
+  $("#s-human_verify_min_seconds").value = s.humanVerifyMinSeconds ?? 2;
+  $("#s-human_verify_escalate").checked = s.humanVerifyEscalate !== false;
   $("#s-human_verify_prompt").value = s.humanVerifyPrompt ?? "";
   $("#s-forward_mode").value = s.forwardMode ?? "forward";
   $("#s-media_group_enabled").checked = !!s.mediaGroupEnabled;
